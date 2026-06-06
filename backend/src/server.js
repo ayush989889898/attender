@@ -23,6 +23,7 @@ function parseCorsOrigins() {
   if (!raw) {
     return [
       'http://localhost:5173',
+      "attender-ko0n489px-ayush989889898s-projects.vercel.app",
       'http://127.0.0.1:5173',
     ];
   }
