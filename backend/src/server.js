@@ -19,15 +19,29 @@ const port = parseInt(process.env.PORT || '5000', 10);
 const server = http.createServer(app); 
 
 function parseCorsOrigins() {
+  const origins = new Set();
+
   const raw = process.env.CORS_ORIGINS?.trim();
-  if (!raw) { 
+  if (raw) {
+    raw.split(',').forEach((origin) => {
+      const trimmed = origin.trim();
+      if (trimmed) origins.add(trimmed);
+    });
+  }
+
+  if (process.env.CLIENT_URL) origins.add(process.env.CLIENT_URL.trim());
+  if (process.env.FRONTEND_URL) origins.add(process.env.FRONTEND_URL.trim());
+
+  if (origins.size === 0) {
     return [
       'http://localhost:5173',
-      "attender-ko0n489px-ayush989889898s-projects.vercel.app",
       'http://127.0.0.1:5173',
+      'https://attender1.vercel.app',
+      'https://attender-1yp2.onrender.com',
     ];
   }
-  return raw.split(',').map((s) => s.trim()).filter(Boolean);
+
+  return Array.from(origins);
 }
 
 function isNgrokOrigin(origin) {
