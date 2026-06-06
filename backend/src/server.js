@@ -94,6 +94,7 @@ app.use('/uploads', express.static('uploads'));
 app.get('/', (req, res) => {
   res.send('Welcome to the Attender API');
 });
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
