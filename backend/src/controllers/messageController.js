@@ -18,6 +18,30 @@ export async function getClassMessages(req, res, next) {
 export async function getDirectMessages(req, res, next) {
   try {
     const { userId } = req.params;
+    const now = new Date();
+
+    await Message.updateMany(
+      {
+        senderId: userId,
+        receiverId: req.user._id,
+        deliveredAt: null,
+      },
+      {
+        $set: { deliveredAt: now },
+      }
+    );
+
+    await Message.updateMany(
+      {
+        senderId: userId,
+        receiverId: req.user._id,
+        seenAt: null,
+      },
+      {
+        $set: { deliveredAt: now, seenAt: now },
+      }
+    );
+
     const messages = await Message.find({
       $or: [
         { senderId: req.user._id, receiverId: userId },
@@ -44,7 +68,8 @@ export async function sendMessage(req, res, next) {
       text: text || '',
       fileUrl: req.file ? req.file.path.replace(/\\/g, '/') : undefined,
       fileName: req.file ? req.file.originalname : undefined,
-      fileType: req.file ? (req.file.mimetype.startsWith('image/') ? 'image' : 'document') : 'none'
+      fileType: req.file ? (req.file.mimetype.startsWith('image/') ? 'image' : 'document') : 'none',
+      deliveredAt: classId ? new Date() : null,
     });
 
     const populated = await Message.findById(newMessage._id)

@@ -13,6 +13,14 @@ const attendanceSchema = new mongoose.Schema(
     notes: { type: String, default: '', trim: true },
     // Links this record to a specific QR generation session
     sessionToken: { type: String, required: true }, 
+    studentGeo: {
+      lat: { type: Number, min: -90, max: 90, default: null },
+      lng: { type: Number, min: -180, max: 180, default: null },
+      distanceMeters: { type: Number, min: 0, default: null },
+      accuracyMeters: { type: Number, min: 0, default: null },
+      effectiveDistanceMeters: { type: Number, min: 0, default: null },
+    },
+    photoCapturedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

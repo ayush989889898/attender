@@ -28,36 +28,70 @@ export default function Dashboard() {
     let cancelled = false;
     const loadData = async () => {
       try {
-        const [{ data: s }, { data: cl }] = await Promise.all([
+        setErr('');
+        const [summaryRes, classesRes] = await Promise.allSettled([
           api.get('/reports/summary'),
           api.get('/classes'),
         ]);
         if (cancelled) return;
-        setSummary(s);
-        setClasses(cl.data || []);
+
+        if (summaryRes.status === 'fulfilled') {
+          setSummary(summaryRes.value.data);
+        } else {
+          setSummary(null);
+          setErr(summaryRes.reason?.message || 'Unable to load summary');
+        }
+
+        if (classesRes.status === 'fulfilled') {
+          setClasses(classesRes.value.data?.data || []);
+        } else {
+          setClasses([]);
+          if (!summaryRes || summaryRes.status === 'fulfilled') {
+            setErr(classesRes.reason?.message || 'Unable to load classes');
+          }
+        }
 
         if (user?.role === 'student') {
-          const { data: st } = await api.get(`/reports/student-trends?days=${days}`);
-          setStudentTrends(st.data || []);
+          try {
+            const { data: st } = await api.get(`/reports/student-trends?days=${days}`);
+            if (!cancelled) setStudentTrends(st.data || []);
+          } catch (trendErr) {
+            if (!cancelled) setStudentTrends([]);
+            if (!cancelled && !err) setErr(trendErr.message);
+          }
         }
 
         const to = new Date();
         const from = new Date();
-        from.setDate(from.getDate() - parseInt(days));
+        from.setDate(from.getDate() - parseInt(days, 10));
         
-        const { data: att } = await api.get('/attendance', {
-          params: { from: from.toISOString(), to: to.toISOString(), limit: 500, page: 1 },
-        });
-        
-        if (cancelled) return;
-        const map = {};
-        (att.data || []).forEach((row) => {
-          const key = new Date(row.date).toISOString().slice(0, 10);
-          if (!map[key]) map[key] = { date: key, present: 0, absent: 0, late: 0 };
-          map[key][row.status] += 1;
-        });
-        const rows = Object.values(map).sort((a, b) => a.date.localeCompare(b.date));
-        setChartRows(rows.map((r) => ({ ...r, label: formatDateLabel(r.date) })));
+        if (user?.role === 'student') {
+                if (!cancelled) setChartRows([]);
+        } else {
+                try {
+                        const { data: rangeRes } = await api.get('/reports/range', {
+                                params: { from: from.toISOString(), to: to.toISOString() },
+                        });
+                        if (cancelled) return;
+                        const map = {};
+                        (rangeRes.data || []).forEach((row) => {
+                                const key = new Date(row.date).toISOString().slice(0, 10);
+                                if (!map[key]) map[key] = { date: key, present: 0, absent: 0, late: 0 };
+                                const st = row.status;
+                                if (st === 'present' || st === 'absent' || st === 'late') {
+                                        map[key][st] += 1;
+                                }
+                        });
+                        const rows = Object.values(map).sort((a, b) => a.date.localeCompare(b.date));
+                        setChartRows(rows.map((r) => ({ ...r, label: formatDateLabel(r.date) })));
+                } catch (attendanceErr) {
+                        if (!cancelled) setChartRows([]);
+                        if (!cancelled && !err) setErr(attendanceErr.message);
+                }
+        }
+
+
+
       } catch (e) {
         if (!cancelled) setErr(e.message);
       }
@@ -84,8 +118,6 @@ export default function Dashboard() {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });
 
-  if (err) return <p className="text-sm text-red-600">{err}</p>;
-
   return (
   <div className="space-y-6 md:space-y-8 pt-7 pb-22 px-7 sm:px-0">
 
@@ -95,6 +127,9 @@ export default function Dashboard() {
         <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white">
           Hello, {user?.firstName || 'User'} 👋
         </h1>
+        {err && (
+          <p className="mt-2 text-xs md:text-sm text-red-600 dark:text-red-400">{err}</p>
+        )}
         <p className="mt-1 text-sm md:text-base text-slate-600 dark:text-slate-300">
           {user?.role === 'student'
             ? 'Track your live attendance progress.'

@@ -3,7 +3,7 @@ import api from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
 export default function SettingsPage() {
-  const { user, refreshUser, applyTheme } = useAuth();
+  const { user, refreshUser, applyTheme, updateUser } = useAuth();
   
   // Profile State
   const [profileForm, setProfileForm] = useState({ firstName: '', lastName: '', email: '' });
@@ -34,6 +34,11 @@ export default function SettingsPage() {
     setProfileMsg({ text: '', type: '' });
     try {
       await api.patch('/users/me', profileForm);
+      updateUser({
+        firstName: profileForm.firstName,
+        lastName: profileForm.lastName,
+        email: profileForm.email,
+      });
       await refreshUser(); // This updates the sidebar and header instantly
       setProfileMsg({ text: 'Profile updated successfully! ✅', type: 'success' });
       
@@ -63,6 +68,7 @@ export default function SettingsPage() {
   const handleThemeChange = async (newTheme) => {
     try {
       await api.patch('/users/me/preferences', { theme: newTheme });
+      updateUser({ theme: newTheme });
       setTheme(newTheme);
       applyTheme(newTheme); // Applies 'dark' class to <html>
       await refreshUser();

@@ -335,7 +335,7 @@ export default function ReportsPage() {
                 </td>
                 <td className="text-center">
                   <span
-                    className={`px-3 py-1 rounded-full text-xs font-bold ${parseFloat(s.percentage) < 75 ? "text-red-600 bg-red-50" : "text-emerald-700 bg-emerald-50"}`}
+                    className={`px-3 py-1 rounded-full text-xs font-bold ${parseFloat(s.percentage) < 60 ? "text-red-600 bg-red-50" : "text-emerald-700 bg-emerald-50"}`}
                   >
                     {s.percentage}%
                   </span>

@@ -25,6 +25,13 @@ export const joinValidators = [
 ];
 
 export const idParam = [param('id').isMongoId(), handleValidation];
+export const startSessionValidators = [
+  param('id').isMongoId(),
+  body('lat').isFloat({ min: -90, max: 90 }),
+  body('lng').isFloat({ min: -180, max: 180 }),
+  body('accuracyMeters').optional().isFloat({ min: 0 }),
+  handleValidation,
+];
 
 export async function createClass(req, res, next) {
   try {
@@ -108,6 +115,7 @@ export async function joinClass(req, res, next) {
 export const startSession = async (req, res) => {
   try {
     const { id } = req.params;
+    const { lat, lng, accuracyMeters } = req.body;
     
     // Generate a fresh 6-character random token
     const newToken = crypto.randomBytes(3).toString('hex').toUpperCase(); 
@@ -117,14 +125,23 @@ export const startSession = async (req, res) => {
       id,
       { 
         sessionToken: newToken, 
-        sessionExpiresAt: expiry 
+        sessionExpiresAt: expiry,
+        sessionLocation: {
+          lat: Number(lat),
+          lng: Number(lng),
+          accuracyMeters:
+            accuracyMeters !== undefined && accuracyMeters !== null
+              ? Number(accuracyMeters)
+              : null,
+        },
       },
       { new: true } // Return the updated document
     );
 
     res.json({ 
       sessionToken: cls.sessionToken, 
-      sessionExpiresAt: cls.sessionExpiresAt 
+      sessionExpiresAt: cls.sessionExpiresAt,
+      sessionLocation: cls.sessionLocation,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

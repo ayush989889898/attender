@@ -37,9 +37,26 @@ export const bulkValidators = [
 export const selfMarkValidators = [
   body('classId').isMongoId(),
   body('sessionToken').notEmpty().trim(),
-  body('status').optional().isIn(['present', 'late']),
+  body('studentLat').isFloat({ min: -90, max: 90 }),
+  body('studentLng').isFloat({ min: -180, max: 180 }),
+  body('studentAccuracyMeters').optional().isFloat({ min: 0 }),
   handleValidation,
 ];
+
+function haversineDistanceMeters(lat1, lon1, lat2, lon2) {
+  const toRad = (value) => (value * Math.PI) / 180;
+  const earthRadius = 6371000;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadius * c;
+}
 
 //
 // ---------------- PERMISSION HELPER ----------------
@@ -161,7 +178,14 @@ export async function markBulk(req, res, next) {
 /** Self attendance (QR) */
 export async function markSelf(req, res, next) {
   try {
-    const { classId, sessionToken } = req.body;
+    const GEOFENCE_METERS = 3;
+    const {
+      classId,
+      sessionToken,
+      studentLat,
+      studentLng,
+      studentAccuracyMeters,
+    } = req.body;
     const userId = req.user._id;
 
     const cls = await ClassModel.findById(classId);
@@ -186,6 +210,33 @@ export async function markSelf(req, res, next) {
       return res.status(400).json({ message: 'QR expired.' });
     }
 
+    if (!cls.studentIds.map((id) => id.toString()).includes(userId.toString())) {
+      return res.status(403).json({ message: 'You are not enrolled in this class.' });
+    }
+
+    const teacherLat = Number(cls.sessionLocation?.lat);
+    const teacherLng = Number(cls.sessionLocation?.lng);
+    if (!Number.isFinite(teacherLat) || !Number.isFinite(teacherLng)) {
+      return res.status(400).json({ message: 'Session location is unavailable.' });
+    }
+
+    const distanceMeters = haversineDistanceMeters(
+      teacherLat,
+      teacherLng,
+      Number(studentLat),
+      Number(studentLng),
+    );
+
+    const teacherAccuracy = Number(cls.sessionLocation?.accuracyMeters || 0);
+    const studentAccuracy = Number(studentAccuracyMeters || 0);
+    const effectiveDistanceMeters = Math.max(
+      0,
+      distanceMeters - (teacherAccuracy + studentAccuracy),
+    );
+
+    // Use effective distance so GPS inaccuracy does not wrongly mark students absent.
+    const statusToMark = effectiveDistanceMeters <= GEOFENCE_METERS ? 'present' : 'absent';
+
     const day = startOfDay(new Date());
 
     const exists = await Attendance.findOne({
@@ -195,7 +246,10 @@ export async function markSelf(req, res, next) {
     });
 
     if (exists) {
-      return res.status(400).json({ message: 'Already marked.' });
+      return res.status(400).json({
+        message: 'Already marked.',
+        status: exists.status,
+      });
     }
 
     await Attendance.create({
@@ -203,13 +257,26 @@ export async function markSelf(req, res, next) {
       userId,
       sessionToken,
       date: day,
-      status: 'present',
+      status: statusToMark,
       markedBy: userId,
+      studentGeo: {
+        lat: Number(studentLat),
+        lng: Number(studentLng),
+        distanceMeters,
+        accuracyMeters: studentAccuracy,
+        effectiveDistanceMeters,
+      },
     });
 
     return res.json({
       success: true,
       studentName: `${req.user.firstName} ${req.user.lastName}`,
+      status: statusToMark,
+      geofenceMeters: GEOFENCE_METERS,
+      distanceMeters,
+      effectiveDistanceMeters,
+      teacherAccuracy,
+      studentAccuracy,
     });
   } catch (error) {
     next(error);
@@ -262,6 +329,7 @@ export async function finalizeAttendance(req, res, next) {
 
     cls.sessionToken = '';
     cls.sessionExpiresAt = null;
+    cls.sessionLocation = { lat: null, lng: null };
     await cls.save();
 
     res.json({

@@ -45,6 +45,17 @@ export function AuthProvider({ children }) {
     loadMe();
   }, [loadMe]);
 
+  const refreshUser = useCallback(async () => {
+    await loadMe();
+  }, [loadMe]);
+
+  const updateUser = useCallback((updates) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      return { ...prev, ...updates };
+    });
+  }, []);
+
   const login = useCallback(async (username, password, role) => {
     const { data } = await api.post("/auth/login", {
       username,
@@ -78,8 +89,11 @@ export function AuthProvider({ children }) {
       login,
       register,
       logout,
+      refreshUser,
+      applyTheme,
+      updateUser,
     }),
-    [user, bootstrapping, login, register, logout]
+    [user, bootstrapping, login, register, logout, refreshUser, applyTheme, updateUser]
   );
 
   return (

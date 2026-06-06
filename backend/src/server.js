@@ -18,17 +18,51 @@ const app = express();
 const port = parseInt(process.env.PORT || '5000', 10);
 const server = http.createServer(app); 
 
-// Allow both localhost and your Network IP for mobile testing
-const corsOrigins = [
-  'http://localhost:5173', 
-  'http://127.0.0.1:5173',
-  'http://192.168.1.4:5173' 
-];
+function parseCorsOrigins() {
+  const raw = process.env.CORS_ORIGINS?.trim();
+  if (!raw) {
+    return [
+      'http://localhost:5173',
+      'http://127.0.0.1:5173',
+    ];
+  }
+  return raw.split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+function isNgrokOrigin(origin) {
+  // Common ngrok domains as of recent ngrok releases
+  // Examples: https://abcd-1234.ngrok-free.app, https://abcd-1234.ngrok-free.dev, https://myname.ngrok.app
+  try {
+    const { hostname, protocol } = new URL(origin);
+    if (protocol !== 'http:' && protocol !== 'https:') return false;
+    return (
+      hostname.endsWith('.ngrok-free.dev') ||
+      hostname.endsWith('.ngrok-free.app') ||
+      hostname.endsWith('.ngrok.dev') ||
+      hostname.endsWith('.ngrok.app') ||
+      hostname.endsWith('.ngrok.io')
+    );
+  } catch {
+    return false;
+  }
+}
+
+const corsOrigins = parseCorsOrigins();
+const allowAllOrigins = process.env.CORS_ALLOW_ALL === 'true';
+
+function corsOriginFn(origin, callback) {
+  // Allow server-to-server / curl / same-origin (no Origin header)
+  if (!origin) return callback(null, true);
+  if (allowAllOrigins) return callback(null, true);
+  if (corsOrigins.includes(origin)) return callback(null, true);
+  if (isNgrokOrigin(origin)) return callback(null, true);
+  return callback(new Error(`CORS blocked origin: ${origin}`), false);
+}
 
 // Setup Socket.io
 const io = new Server(server, {
   cors: { 
-    origin: corsOrigins,
+    origin: corsOriginFn,
     methods: ["GET", "POST", "PATCH", "DELETE"],
     credentials: true
   }
@@ -44,7 +78,7 @@ io.on('connection', (socket) => {
 
 // Middleware
 app.use(cors({
-  origin: corsOrigins,
+  origin: corsOriginFn,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -69,6 +103,6 @@ connectDb().then(() => {
   // Use '0.0.0.0' to listen on all network interfaces
   server.listen(port, '0.0.0.0', () => {
     console.log(`\n🚀 Server running locally: http://localhost:${port}`);
-    console.log(`📱 Mobile/Network Access: http://192.168.1.4:${port}`);
+    console.log(`🌍 Public via ngrok: run "ngrok http ${port}"`);
   });
 });

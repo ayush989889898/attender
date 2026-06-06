@@ -26,6 +26,8 @@ export default function ClassesPage() {
   const [rawAttendance, setRawAttendance] = useState([]);
   const [loadingStats, setLoadingStats] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [qrFullscreen, setQrFullscreen] = useState(false);
+  const [locationLoading, setLocationLoading] = useState(false);
 
   const loadClasses = async () => {
     try {
@@ -127,11 +129,43 @@ export default function ClassesPage() {
 
   const startAttendance = async (cls) => {
     try {
-      const { data } = await api.post(`/classes/${cls._id}/session`);
+      setLocationLoading(true);
+      const teacherPosition = await new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject(new Error("Geolocation is not supported by this browser."));
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          (position) => resolve(position),
+          (geoError) => reject(geoError),
+          { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
+      });
+
+      const { data } = await api.post(`/classes/${cls._id}/session`, {
+        lat: teacherPosition.coords.latitude,
+        lng: teacherPosition.coords.longitude,
+        accuracyMeters: teacherPosition.coords.accuracy,
+      });
       setTimeLeft(60);
-      setView({ type: "attendance", data: { ...cls, sessionToken: data.sessionToken } });
+      setView({
+        type: "attendance",
+        data: {
+          ...cls,
+          sessionToken: data.sessionToken,
+          sessionLat: teacherPosition.coords.latitude,
+          sessionLng: teacherPosition.coords.longitude,
+          sessionAccuracyMeters: teacherPosition.coords.accuracy,
+        },
+      });
     } catch (err) {
-      setError("Failed to start session.");
+      if (err?.code === 1) {
+        setError("Location permission denied. Allow location to start attendance.");
+      } else {
+        setError("Failed to start session with live location.");
+      }
+    } finally {
+      setLocationLoading(false);
     }
   };
 
@@ -147,15 +181,31 @@ export default function ClassesPage() {
 
   if (view.type === "attendance") {
     const cls = view.data;
+    // Keep payload short for better mobile scanning reliability
+    const qrPayload = JSON.stringify({
+      c: cls._id,
+      t: cls.sessionToken,
+      la: cls.sessionLat,
+      lo: cls.sessionLng,
+      ac: cls.sessionAccuracyMeters,
+    });
     return (
       <div className="w-full min-h-[calc(100vh-120px)] flex items-center justify-center p-4 overflow-y-auto">
         <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl p-6 md:p-10 text-center border border-slate-200 dark:border-slate-800 animate-in zoom-in duration-300 my-8">
           <h2 className="text-xl md:text-2xl font-black">{cls.name}</h2>
           <p className="text-brand-600 text-[10px] font-black uppercase tracking-widest mb-6">{cls.subject}</p>
           <div className="flex justify-center mb-6">
-            <div className="bg-white p-4 rounded-2xl shadow-inner border border-slate-50">
-              <QRCodeSVG value={JSON.stringify({ classId: cls._id, token: cls.sessionToken })} size={220} />
-            </div>
+            <button
+              type="button"
+              onClick={() => setQrFullscreen(true)}
+              className="bg-white p-4 rounded-2xl shadow-inner border border-slate-50 active:scale-[0.99] transition-transform"
+              aria-label="Open QR fullscreen"
+            >
+              <QRCodeSVG value={qrPayload} size={280} includeMargin level="H" />
+              <div className="mt-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                Tap to enlarge
+              </div>
+            </button>
           </div>
           <div className="mb-6">
             <div className="text-5xl font-black tracking-tighter">{timeLeft}s</div>
@@ -166,6 +216,39 @@ export default function ClassesPage() {
             <button onClick={() => setView({ type: "list", data: null })} className="bg-slate-100 dark:bg-slate-800 py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all hover:bg-slate-200">Back to List</button>
           </div>
         </div>
+
+        {qrFullscreen && (
+          <div
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setQrFullscreen(false)}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div
+              className="bg-white rounded-3xl p-6 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between gap-4 mb-4">
+                <div className="text-left">
+                  <div className="text-sm font-black">{cls.name}</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                    Hold phone steady • 20–30cm distance
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setQrFullscreen(false)}
+                  className="px-4 py-2 rounded-2xl bg-slate-100 text-xs font-black uppercase"
+                >
+                  Close
+                </button>
+              </div>
+              <div className="bg-white rounded-2xl p-3">
+                <QRCodeSVG value={qrPayload} size={420} includeMargin level="H" />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -323,7 +406,7 @@ export default function ClassesPage() {
               <p className="text-slate-400 font-black text-[10px] uppercase tracking-widest mt-1">{cls.standard} • {cls.subject}</p>
               <div className="flex gap-2 mt-8">
                 {user.role === "teacher" && (
-                  <button onClick={() => startAttendance(cls)} className="flex-1 bg-brand-600 text-white py-3 rounded-xl text-[10px] font-black uppercase">Session</button>
+                  <button onClick={() => startAttendance(cls)} disabled={locationLoading} className="flex-1 bg-brand-600 text-white py-3 rounded-xl text-[10px] font-black uppercase disabled:opacity-50 disabled:cursor-not-allowed">{locationLoading ? "Locating..." : "Session"}</button>
                 )}
                 <button onClick={() => setView({ type: "details", data: cls })} className="flex-1 bg-slate-100 py-3 rounded-xl text-[10px] font-black uppercase">Details</button>
               </div>

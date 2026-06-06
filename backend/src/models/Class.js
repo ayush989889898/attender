@@ -29,6 +29,12 @@ const classSchema = new mongoose.Schema(
     sessionToken: { type: String, default: "" },
 
     sessionExpiresAt: { type: Date, default: null },
+
+    sessionLocation: {
+      lat: { type: Number, min: -90, max: 90, default: null },
+      lng: { type: Number, min: -180, max: 180, default: null },
+      accuracyMeters: { type: Number, min: 0, default: null },
+    },
   },
 
   { timestamps: true },

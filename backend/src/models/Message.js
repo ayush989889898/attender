@@ -10,6 +10,9 @@ const messageSchema = new mongoose.Schema(
     fileUrl: { type: String }, // For photos/documents
     fileName: { type: String },
     fileType: { type: String, enum: ['image', 'document', 'none'], default: 'none' },
+    isEdited: { type: Boolean, default: false },
+    deliveredAt: { type: Date, default: null },
+    seenAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
