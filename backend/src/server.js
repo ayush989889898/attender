@@ -62,7 +62,16 @@ function isNgrokOrigin(origin) {
   }
 }
 
-
+function isVercelOrigin(origin) {
+  try {
+    const { hostname, protocol } = new URL(origin);
+    if (protocol !== 'http:' && protocol !== 'https:') return false;
+    if (hostname === 'attender1.vercel.app') return true;
+    return /^attender1-[a-z0-9-]+\.vercel\.app$/.test(hostname);
+  } catch {
+    return false;
+  }
+}
 
 const corsOrigins = parseCorsOrigins();
 const allowAllOrigins = process.env.CORS_ALLOW_ALL === 'true';
@@ -73,6 +82,7 @@ function corsOriginFn(origin, callback) {
   if (allowAllOrigins) return callback(null, true);
   if (corsOrigins.includes(origin)) return callback(null, true);
   if (isNgrokOrigin(origin)) return callback(null, true);
+  if (isVercelOrigin(origin)) return callback(null, true);
   return callback(new Error(`CORS blocked origin: ${origin}`), false);
 }
 
