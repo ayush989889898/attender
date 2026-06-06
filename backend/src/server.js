@@ -20,7 +20,7 @@ const server = http.createServer(app);
 
 function parseCorsOrigins() {
   const raw = process.env.CORS_ORIGINS?.trim();
-  if (!raw) {
+  if (!raw) { 
     return [
       'http://localhost:5173',
       "attender-ko0n489px-ayush989889898s-projects.vercel.app",
@@ -47,6 +47,8 @@ function isNgrokOrigin(origin) {
     return false;
   }
 }
+
+
 
 const corsOrigins = parseCorsOrigins();
 const allowAllOrigins = process.env.CORS_ALLOW_ALL === 'true';
@@ -89,6 +91,9 @@ app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
 app.use('/uploads', express.static('uploads'));
 
+app.get('/', (req, res) => {
+  res.send('Welcome to the Attender API');
+});
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);

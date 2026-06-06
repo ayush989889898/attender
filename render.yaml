@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: attender-backend
+    env: node
+    branch: main
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && npm start
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        value: ""
+      - key: JWT_SECRET
+        value: ""
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: CORS_ALLOW_ALL
+        value: "false"
+      # Set the production frontend URL and allowed CORS origins in the Render dashboard or via render-cli secrets.
+      # Do not commit real secrets here.
+      - key: FRONTEND_URL
+        value: https://your-vercel-app.vercel.app
+      - key: CLIENT_URL
+        value: https://your-vercel-app.vercel.app
